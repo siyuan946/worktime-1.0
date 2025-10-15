@@ -1,0 +1,145 @@
+body {
+  background-color: #f8f9fa;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+}
+
+.section-card {
+  background-color: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: .5rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+}
+
+.table th, .table td { vertical-align: middle; }
+
+/* Ensure barcode cells are tall enough so barcodes aren't clipped */
+.barcode-cell { min-width: 240px; min-height: 90px; }
+.barcode-cell img { display: block; height: 80px; width: auto; max-width: 280px; }
+
+/* allow table cells to wrap long text without widening the table */
+.wrap-text { white-space: pre-wrap; word-break: break-word; max-width: 320px; }
+
+/* wider inputs for worker allocations */
+.alloc-input { width: 90px; }
+
+/* textarea that expands vertically to fit its content */
+.auto-grow { overflow: hidden; resize: none; }
+
+/* highlight editable fields so they stand out against table background */
+.edit-highlight { background-color: #fffbe6; border-color: #f0ad4e; }
+
+
+.upload-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: flex-end;
+}
+
+.toolbar-block {
+  min-width: 220px;
+}
+
+.upload-toolbar .spinner-border {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.print-text { display: none; }
+.print-only { display: none; }
+
+.screen-only { display: block; }
+.print-area { display: none; }
+.print-page { margin-bottom: 1.5rem; }
+.print-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: .5rem;
+}
+.print-title { font-weight: 600; font-size: 1.1rem; }
+.print-meta { font-size: .9rem; color: #6c757d; }
+
+.blank-row { display: table-row; background-color: #fdfdfd; }
+.blank-row td { min-height: 24px; }
+
+/* ===================== PRINT ===================== */
+@media print {
+  .screen-only { display: none !important; }
+  .print-area { display: block !important; }
+  .no-print { display: none !important; }
+  .print-text { display: inline !important; }
+  .print-only { display: table-cell !important; }
+
+  .navbar,
+  .section-card {
+    display: none !important;
+  }
+
+  #preview-table,
+  #print-area {
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+  }
+
+  #preview-table table,
+  #print-area table {
+    table-layout: auto;
+    font-size: 10px;
+    width: 100%;
+  }
+
+  #preview-table th,
+  #preview-table td {
+    white-space: nowrap;
+    height: 26px;
+    line-height: 26px;
+    vertical-align: middle;
+  }
+
+  #print-area th,
+  #print-area td {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.35;
+    height: auto;
+    vertical-align: middle;
+    padding: 4px 6px;
+  }
+
+  #preview-table thead,
+  #print-area thead { display: table-header-group; }
+  #preview-table tr,
+  #print-area tr { page-break-inside: avoid; break-inside: avoid; }
+
+  #print-area .blank-row td {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    line-height: 1.1;
+    min-height: 20px;
+  }
+
+  .print-page table { margin-bottom: 0 !important; }
+
+  #preview-table .barcode-cell img,
+  #print-area .barcode-cell img { height: 80px; max-width: 280px; width: auto; }
+  #print-area .barcode-cell div { word-break: break-all; }
+
+  .blank-row { display: table-row !important; }
+
+  .print-page { break-after: page; page-break-after: always; }
+  .print-page:last-child { break-after: auto; page-break-after: auto; }
+
+  @page { size: A4; margin: 10mm; }
+}
