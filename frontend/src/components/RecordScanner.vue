@@ -187,7 +187,7 @@ export default {
   mounted() {
     window.addEventListener('keydown', this.handleScanKey)
   },
-  beforeUnmount() {
+  beforeDestroy() {
     window.removeEventListener('keydown', this.handleScanKey)
   },
   computed: {
