@@ -7,7 +7,13 @@
           <div class="toolbar-block flex-grow-1">
             <label class="form-label mb-1">选择Excel文件</label>
             <div class="d-flex flex-wrap gap-2 align-items-center">
-              <input class="form-control" type="file" @change="onFileChange" :disabled="loading || printing">
+              <input
+                ref="fileInput"
+                class="form-control"
+                type="file"
+                @change="onFileChange"
+                :disabled="loading || printing"
+              >
               <button class="btn btn-outline-primary" @click="parse" :disabled="!file || loading || printing">解析</button>
               <div class="spinner-border" v-if="loading"></div>
             </div>
@@ -44,6 +50,9 @@
         <div class="progress-bar" role="progressbar" :style="{ width: parseProgress + '%' }">
           {{ parseProgress }}%
         </div>
+      </div>
+      <div class="screen-only text-muted small" v-if="statusMessage">
+        {{ statusMessage }}
       </div>
 
       <div class="alert alert-info py-2 px-3 screen-only" v-if="summary">
@@ -271,7 +280,11 @@ export default {
       jobId: null,
       _poll: null,
       pollIntervalMs: 1500,
-      importing: false
+      importing: false,
+      statusMessage: '',
+      pollErrorCount: 0,
+      pollErrorLimit: 3,
+      lastProcessedRows: 0
     }
   },
   created() {
@@ -384,6 +397,11 @@ export default {
       }
       return { 'X-User': user }
     },
+    clearFileSelection() {
+      if (this.$refs.fileInput) {
+        this.$refs.fileInput.value = ''
+      }
+    },
     onFileChange(e) { this.file = e.target.files[0] || null },
     async fetchFiles() {
       try {
@@ -476,6 +494,7 @@ export default {
     },
     async load() {
       if (!this.selectedFileId) return
+      this.statusMessage = ''
       this.loading = true
       this.barcodeCache = {}
       this.summary = null
@@ -495,6 +514,7 @@ export default {
       let headers
       try { headers = this.requireUserHeaders() }
       catch (err) { return }
+      this.statusMessage = ''
       this.loading = true
       try {
         await axios.delete(`/api/files/${this.selectedFileId}`, { headers })
@@ -531,12 +551,16 @@ export default {
       try { headers = this.requireUserHeaders() }
       catch (err) { return }
 
+      this.stopPolling()
       this.loading = true
       this.importing = true
       this.showProgress = true
       this.parseProgress = 5
       this.barcodeCache = {}
       this.summary = null
+      this.statusMessage = '正在上传文件，请稍候…'
+      this.pollErrorCount = 0
+      this.lastProcessedRows = 0
 
       try {
         const data = new FormData()
@@ -547,6 +571,7 @@ export default {
         this.jobId = jobId || null
         this.fileId = fileId || null
         this.selectedFileId = fileId ? String(fileId) : ''
+        this.statusMessage = '解析任务已启动，正在获取进度…'
         // 启动轮询
         this.startPolling(jobId)
       } catch (e) {
@@ -554,6 +579,7 @@ export default {
         this.showProgress = false
         this.loading = false
         this.importing = false
+        this.statusMessage = '解析失败，请稍后重试'
       }
     },
 
@@ -564,9 +590,14 @@ export default {
         this.showProgress = false
         this.loading = false
         this.importing = false
+        this.statusMessage = '导入任务启动失败'
         return
       }
       this.stopPolling()
+
+      this.statusMessage = '正在解析，请稍候…'
+      this.pollErrorCount = 0
+      this.lastProcessedRows = 0
 
       const tick = async () => {
         try {
@@ -575,10 +606,25 @@ export default {
           const status = s.status
           const processed = Number(s.processedRows || 0)
           const output = Number(s.outputRows || 0)
+          const total = Number(s.totalRows || s.total || s.expectedRows || 0)
+          const effective = Math.max(processed, output, 0)
 
           // 简单进度估算（没有总数，只做“看起来动”的估计）
-          const est = Math.max(20, Math.min(95, 20 + Math.floor(Math.log10(processed + 1) * 30)))
-          this.parseProgress = est
+          if (Number.isFinite(total) && total > 0) {
+            const percent = Math.round((Math.min(effective, total) / total) * 100)
+            this.parseProgress = Math.max(20, Math.min(99, percent))
+            if (effective !== this.lastProcessedRows) {
+              this.statusMessage = `已处理 ${effective} / ${total} 行`
+            }
+          } else {
+            const est = Math.max(20, Math.min(95, 20 + Math.floor(Math.log10(effective + 1) * 30)))
+            this.parseProgress = Math.max(this.parseProgress, est)
+            if (effective !== this.lastProcessedRows) {
+              this.statusMessage = `已处理 ${effective} 行`
+            }
+          }
+          this.lastProcessedRows = effective
+          this.pollErrorCount = 0
 
           if (status === 'COMPLETED') {
             this.stopPolling()
@@ -593,21 +639,37 @@ export default {
 
             // 清理状态
             this.file = null
+            this.clearFileSelection()
             this.loading = false
             this.importing = false
             setTimeout(() => { this.showProgress = false }, 600)
+            const completed = output || processed
+            this.statusMessage = completed ? `解析完成，共导入 ${completed} 条记录` : '解析完成'
             alert('导入完成')
           } else if (status === 'FAILED') {
             this.stopPolling()
             this.loading = false
             this.importing = false
             this.showProgress = false
+            this.statusMessage = s.message ? String(s.message) : '导入失败'
             this.handleRequestError(new Error(s.message || '导入失败'), '导入失败')
           } else {
             // RUNNING：继续轮询
           }
         } catch (e) {
-          // 偶发轮询错误忽略
+          this.pollErrorCount += 1
+          if (this.pollErrorCount >= this.pollErrorLimit) {
+            this.stopPolling()
+            this.loading = false
+            this.importing = false
+            this.showProgress = false
+            this.statusMessage = '获取导入进度失败，请稍后重试'
+            this.handleRequestError(e, '获取导入进度失败')
+            return
+          }
+          if (this.statusMessage) {
+            this.statusMessage = '网络波动，正在重试获取进度…'
+          }
           console.warn('poll error', e && e.message)
         }
       }
@@ -620,6 +682,8 @@ export default {
         clearInterval(this._poll)
         this._poll = null
       }
+      this.pollErrorCount = 0
+      this.lastProcessedRows = 0
     },
     // ====== 原有方法保持不变（以下均与你提供的版本一致）======
     markDirty(record) {
