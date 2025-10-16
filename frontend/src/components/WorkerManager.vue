@@ -99,7 +99,7 @@ export default {
       this.workers = res.data
     },
     async createWorker() {
-      await axios.post('`/api/workers', this.newWorker)
+      await axios.post('/api/workers', this.newWorker)
       this.closeModal()
       this.fetchWorkers(this.search)
     },
